@@ -80,11 +80,12 @@ class MotorConfig(Config):
 
 class MotorDataset(utils.Dataset):
 
-    def load_motor(self, subset):
+    def load_motor(self, subset, set=None):
         """Load a subset of the Motorcycle dataset.
         subset: Subset to load: train, develop or validate
         """
-        from .data_set import DataSet
+
+        from data_set import DataSet
         # Add classes. We have only one class to add.
         self.add_class("motorcycle", 1, "motorcycle")
 
@@ -110,7 +111,7 @@ class MotorDataset(utils.Dataset):
         # Note: In VIA 2.0, regions was changed from a dict to a list.
         #annotations = json.load(open(os.path.join(dataset_dir, "via_region_data.json")))
         if subset == "train":
-            annotations = DataSet().training('image', 'motorcycle')
+            annotations = sorted(DataSet().training('image', 'motorcycle'))
         elif subset == "develop":
             annotations = DataSet().development('image', 'motorcycle')
         else:
@@ -151,12 +152,12 @@ class MotorDataset(utils.Dataset):
         file_name = self.image_info[image_id]["id"]
         # image = image.imread(fname=image_id, format="jpg") #.image
 
-        from .data_set import DataSet
+        from data_set import DataSet
         """Load the specified image and return a [H,W,3] Numpy array.
                 """
         # Load image
         mask = skimage.io.imread(DataSet.path(self, "mask", "motorcycle")
-                                 + DataSet.training(self, "mask", "motorcycle")[image_id])
+                                 + sorted(DataSet.training(self, "mask", "motorcycle"))[image_id])
         # If grayscale. Convert to RGB for consistency.
         if mask.ndim != 3:
             mask = skimage.color.gray2rgb(mask)
@@ -181,12 +182,12 @@ def train(model):
     """Train the model."""
     # Training dataset.
     dataset_train = MotorDataset()
-    dataset_train.load_motor(args.dataset, "train")
+    dataset_train.load_motor(set=args.dataset, subset="train")
     dataset_train.prepare()
 
     # Validation dataset
     dataset_val = MotorDataset()
-    dataset_val.load_motor(args.dataset, "validate")
+    dataset_val.load_motor(set=args.dataset, subset="validate")
     dataset_val.prepare()
 
     # *** This training schedule is an example. Update to your needs ***
@@ -329,9 +330,9 @@ if __name__ == '__main__':
     if args.command == "train":
         model = modellib.MaskRCNN(mode="training", config=config,
                                   model_dir=args.logs)
-    # else:
-    #     model = modellib.MaskRCNN(mode="inference", config=config,
-    #                               model_dir=args.logs)
+    else:
+        model = modellib.MaskRCNN(mode="inference", config=config,
+                                  model_dir=args.logs)
 
     # Select weights file to load
     if args.weights.lower() == "coco":

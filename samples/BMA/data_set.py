@@ -2,21 +2,22 @@ import os
 
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../")
-ROOT_IM = ROOT_DIR[:15]
+ROOT_IM = ROOT_DIR
 
-class DataSet:
+
+class DataSet():
     # Directory of images to run detection on
-    IMAGE_DIR = os.path.join(ROOT_IM, "OneDrive\Desktop\expskl\expskl")
+    IMAGE_DIR = os.path.join(ROOT_IM, "content/drive/My Drive/BMA/Training")
 
     # the specific directory of the type
-    im_dir = IMAGE_DIR + '\im'
-    mask_dir = IMAGE_DIR + '\mask'
-    skl_dir = IMAGE_DIR + '\skl'
+    im_dir = IMAGE_DIR + '/im'
+    mask_dir = IMAGE_DIR + '/mask'
+    skl_dir = IMAGE_DIR + '/skl'
 
     # creates a list of all the files in the directory
-    im_files = os.listdir(im_dir + '.')
-    mask_files = os.listdir(mask_dir + '.')
-    skl_files = os.listdir(skl_dir + '.')
+    im_files = os.listdir(im_dir)
+    mask_files = os.listdir(mask_dir)
+    skl_files = os.listdir(skl_dir)
 
     # constants for the number of files we want for training (80%), development(10%), and testing(10%)
     # based on the total number of files for each shape.
@@ -30,7 +31,7 @@ class DataSet:
     num_val = num_devel  # (they are the same - 10%)
 
     # List of all the shapes contained in
-    shape_names = os.listdir(IMAGE_DIR + '\im\.')
+    shape_names = os.listdir(IMAGE_DIR + '/im/')
 
     def training(self, type, shape=None):
         """
@@ -53,15 +54,15 @@ class DataSet:
         if shape is None:
             training = {}
             for i, item in enumerate(file_list):
-                training[item] = os.listdir(directory + '\\' + item + '\.')[:DataSet.num_training[i]]
-            return training
+                training[item] = os.listdir(directory + '/' + item + '/.')
+            return sorted(training)
         else:
             if shape not in DataSet.shape_names:
                 raise ValueError("shape should be contained in %s, not %s" % (DataSet.shape_names, shape))
             else:
                 index = DataSet.shape_names.index(shape)
-            training = os.listdir(directory + '\\' + shape + '\.')[:DataSet.num_training[index]]
-            return training
+            training = os.listdir(directory + '/' + shape + '/.')
+            return sorted(training)
 
     def development(self, type, shape=None):
         """
@@ -84,7 +85,7 @@ class DataSet:
         if shape is None:
             development = {}
             for i, item in enumerate(file_list):
-                development[item] = os.listdir(directory + '\\' + item + '\.')[
+                development[item] = os.listdir(directory + '/' + item + '/.')[
                                    DataSet.num_training[i]: DataSet.num_training[i] + DataSet.num_devel[i]]
             return development
         else:
@@ -92,7 +93,7 @@ class DataSet:
                 raise ValueError("shape should be contained in %s, not %s" % (DataSet.shape_names, shape))
             else:
                 index = DataSet.shape_names.index(shape)
-            development = os.listdir(directory + '\\' + shape + '\.')[DataSet.num_training[index]:
+            development = os.listdir(directory + '/' + shape + '/.')[DataSet.num_training[index]:
                                                                    DataSet.num_training[index]
                                                                    + DataSet.num_devel[index]]
             return development
@@ -119,7 +120,7 @@ class DataSet:
             validation = {}
             for i, item in enumerate(file_list):
 
-                validation[item] = os.listdir(directory + '\\' + item + '\.')[DataSet.num_devel[i]
+                validation[item] = os.listdir(directory + '/' + item + '/.')[DataSet.num_devel[i]
                                                                            + DataSet.num_training[i]:
                                                                            DataSet.num_devel[i]
                                                                            + DataSet.num_training[i]
@@ -130,7 +131,7 @@ class DataSet:
                 raise ValueError("shape should be contained in %s, not %s" % (DataSet.shape_names, shape))
             else:
                 index = DataSet.shape_names.index(shape)
-            validation = os.listdir(directory + '\\' + shape + '\.')[DataSet.num_devel[index]
+            validation = os.listdir(directory + '/' + shape + '/.')[DataSet.num_devel[index]
                                                                        + DataSet.num_training[index]:
                                                                        DataSet.num_devel[index]
                                                                        + DataSet.num_training[index]
@@ -144,11 +145,11 @@ class DataSet:
         """
 
         if type is 'image':
-            return DataSet.im_dir + '\\' + shape + '\\'
+            return DataSet.im_dir + '/' + shape + '/'
         elif type is 'mask':
-            return DataSet.mask_dir + '\\' + shape + '\\'
+            return DataSet.mask_dir + '/' + shape + '/'
         elif type is 'skeleton':
-            return DataSet.skl_dir + '\\' + shape + '\\'
+            return DataSet.skl_dir + '/' + shape + '/'
         else:
             raise ValueError("type should be 'image', 'mask', or 'skeleton'. Not %s" % type)
 
