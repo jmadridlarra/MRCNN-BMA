@@ -7,7 +7,7 @@ ROOT_IM = ROOT_DIR
 
 class DataSet():
     # Directory of images to run detection on
-    IMAGE_DIR = os.path.join("Training")
+    IMAGE_DIR = ROOT_IM + "/BMA/Training"
 
     # the specific directory of the type
     im_dir = IMAGE_DIR + '/im'
