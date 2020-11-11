@@ -55,14 +55,22 @@ class DataSet():
             training = {}
             for i, item in enumerate(file_list):
                 training[item] = os.listdir(directory + '/' + item + '/.')
+            
             return sorted(training)
+            
         else:
+            training = []
             if shape not in DataSet.shape_names:
                 raise ValueError("shape should be contained in %s, not %s" % (DataSet.shape_names, shape))
             else:
                 index = DataSet.shape_names.index(shape)
-            training = os.listdir(directory + '/' + shape + '/.')
+            ph = os.listdir(directory + '/' + shape + '/.')
+            for image in ph:
+                if image.endswith('.jpg') or image.endswith('.png'):
+                    training.append(image)
+            
             return sorted(training)
+            
 
     def development(self, type, shape=None):
         """
