@@ -1704,7 +1704,7 @@ class DataGenerator(keras.utils.Sequence):
     
     def data_generator(self,image_ids):
         b=0
-        while b < self.batch_size:
+        while b < self.batch_size and b < image_ids.shape[0]:
             try: 
                 # Get GT bounding boxes and masks for image.
                 image_id = image_ids[b]
@@ -1725,6 +1725,7 @@ class DataGenerator(keras.utils.Sequence):
                 # where we train on a subset of classes and the image doesn't
                 # have any of the classes we care about.
                 if not np.any(gt_class_ids > 0):
+                    #b += 1
                     continue
 
                 # RPN Targets
@@ -1810,7 +1811,9 @@ class DataGenerator(keras.utils.Sequence):
                                 batch_mrcnn_class_ids, -1)
                             outputs.extend(
                                 [batch_mrcnn_class_ids, batch_mrcnn_bbox, batch_mrcnn_mask])
-
+                    #try:
+                    #yield inputs, outputs
+                    #except:
                     return inputs, outputs
 
             except (GeneratorExit, KeyboardInterrupt):
