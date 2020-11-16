@@ -79,7 +79,7 @@ class MotorConfig(Config):
 ############################################################
 
 class MotorDataset(utils.Dataset):
-
+    sub = None
     def load_motor(self, subset, set=None):
         """Load a subset of the Motorcycle dataset.
         subset: Subset to load: train, develop or validate
@@ -111,15 +111,18 @@ class MotorDataset(utils.Dataset):
         # Note: In VIA 2.0, regions was changed from a dict to a list.
         #annotations = json.load(open(os.path.join(dataset_dir, "via_region_data.json")))
         if subset == "train":
+            MotorDataset.sub = 'Training'
             annotations = sorted(DataSet().training('image', 'motorcycle'))
         elif subset == "develop":
-            annotations = DataSet().development('image', 'motorcycle')
+            MotorDataset.sub = 'Development'
+            annotations = sorted(DataSet().development('image', 'motorcycle'))
         else:
-            annotations = DataSet().validation('image', 'motorcycle')
+            MotorDataset.sub = 'Validation'
+            annotations = sorted(DataSet().validation('image', 'motorcycle'))
 
         # Add images
         for a in annotations:
-            image_path = DataSet().path('image', 'motorcycle') + a
+            image_path = DataSet().path('image', 'motorcycle', MotorDataset.sub) + a
             self.add_image(
                 "motorcycle",
                 image_id=a,  # use file name as a unique image id
@@ -155,9 +158,15 @@ class MotorDataset(utils.Dataset):
         from data_set import DataSet
         """Load the specified image and return a [H,W,3] Numpy array.
                 """
+        if MotorDataset.sub == 'Training':
+            mask_id = sorted(DataSet.training(self, "mask", "motorcycle"))[image_id]
+        elif MotorDataset.sub == 'Development':
+            mask_id = sorted(DataSet.development(self, "mask", "motorcycle"))[image_id]
+        else:
+            mask_id = sorted(DataSet.validation(self, "mask", "motorcycle"))[image_id]
         # Load image
-        mask = skimage.io.imread(DataSet.path(self, "mask", "motorcycle")
-                                 + sorted(DataSet.training(self, "mask", "motorcycle"))[image_id])
+        mask = skimage.io.imread(DataSet.path(self, "mask", "motorcycle", MotorDataset.sub)
+                                 + mask_id)
         # If grayscale. Convert to RGB for consistency.
         if mask.ndim != 3:
             mask = skimage.color.gray2rgb(mask)
