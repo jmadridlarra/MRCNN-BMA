@@ -79,13 +79,13 @@ class MotorConfig(Config):
 ############################################################
 
 class MotorDataset(utils.Dataset):
-    sub = None
+    
     def load_motor(self, subset, set=None):
         """Load a subset of the Motorcycle dataset.
         subset: Subset to load: train, develop or validate
         """
 
-        from data_set import DataSet
+        from samples.BMA.data_set import DataSet
         # Add classes. We have only one class to add.
         self.add_class("motorcycle", 1, "motorcycle")
 
@@ -111,18 +111,20 @@ class MotorDataset(utils.Dataset):
         # Note: In VIA 2.0, regions was changed from a dict to a list.
         #annotations = json.load(open(os.path.join(dataset_dir, "via_region_data.json")))
         if subset == "train":
-            MotorDataset.sub = 'Training'
+            self.sub = 'Training'
             annotations = sorted(DataSet().training('image', 'motorcycle'))
         elif subset == "develop":
-            MotorDataset.sub = 'Development'
+            self.sub = 'Development'
             annotations = sorted(DataSet().development('image', 'motorcycle'))
-        else:
-            MotorDataset.sub = 'Validation'
+        elif subset == "validate":
+            self.sub = 'Validation'
             annotations = sorted(DataSet().validation('image', 'motorcycle'))
+        else:
+            print("did not expect " + subset)
 
         # Add images
         for a in annotations:
-            image_path = DataSet().path('image', 'motorcycle', MotorDataset.sub) + a
+            image_path = DataSet().path('image', 'motorcycle', self.sub) + a
             self.add_image(
                 "motorcycle",
                 image_id=a,  # use file name as a unique image id
@@ -155,17 +157,19 @@ class MotorDataset(utils.Dataset):
         file_name = self.image_info[image_id]["id"]
         # image = image.imread(fname=image_id, format="jpg") #.image
 
-        from data_set import DataSet
+        from samples.BMA.data_set import DataSet
         """Load the specified image and return a [H,W,3] Numpy array.
                 """
-        if MotorDataset.sub == 'Training':
+        if self.sub == 'Training':
             mask_id = sorted(DataSet.training(self, "mask", "motorcycle"))[image_id]
-        elif MotorDataset.sub == 'Development':
+        elif self.sub == 'Development':
             mask_id = sorted(DataSet.development(self, "mask", "motorcycle"))[image_id]
-        else:
+        elif self.sub == "Validation": 
             mask_id = sorted(DataSet.validation(self, "mask", "motorcycle"))[image_id]
+        else:
+            print("expected Training, Development, or Validation, not %s" % str(self.sub)) 
         # Load image
-        mask = skimage.io.imread(DataSet.path(self, "mask", "motorcycle", MotorDataset.sub)
+        mask = skimage.io.imread(DataSet.path(self, "mask", "motorcycle", self.sub)
                                  + mask_id)
         # If grayscale. Convert to RGB for consistency.
         if mask.ndim != 3:
@@ -206,7 +210,7 @@ def train(model):
     print("Training network heads")
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
-                epochs=5,
+                epochs=50,
                 layers='heads')
 
 
