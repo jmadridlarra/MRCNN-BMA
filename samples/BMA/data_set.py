@@ -53,10 +53,14 @@ class DataSet():
 
         if shape is None:
             training = {}
-            for i, item in enumerate(file_list):
-                training[item] = os.listdir(directory + '/' + item + '/.')
-            
-            return sorted(training)
+            item_list = []
+            for item in DataSet.shape_names:
+                ph = os.listdir(directory + '/' + item + '/.')
+                for image in ph:
+                    if image.endswith('.jpg') or image.endswith('.png'):
+                        item_list.append(image) 
+                training[item] = sorted(item_list)
+            return training
             
         else:
             training = []
