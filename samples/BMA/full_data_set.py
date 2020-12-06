@@ -62,13 +62,13 @@ class FullConfig(Config):
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
-    IMAGES_PER_GPU = 2
+    IMAGES_PER_GPU = 4
 
     # Number of classes (including background)
-    NUM_CLASSES = 1 + 1  # Background + balloon
+    NUM_CLASSES = 18  # Background + 17 classes
 
     # Number of training steps per epoch
-    STEPS_PER_EPOCH = 36
+    STEPS_PER_EPOCH = 2904
 
     # Skip detections with < 90% confidence
     DETECTION_MIN_CONFIDENCE = 0.9
@@ -87,8 +87,8 @@ class FullDataset(utils.Dataset):
 
         from samples.BMA.data_set import DataSet
         # Add classes. 
-        for cls in DataSet.shape_names:
-            self.add_class("full", 1, str(cls))
+        for i, cls in enumerate(DataSet.shape_names):
+            self.add_class("full", i, str(cls))
 
         # Train, development, or validation dataset?
         assert subset in ["train", "develop", "validate"]
@@ -116,23 +116,33 @@ class FullDataset(utils.Dataset):
         if subset == "train":
             self.sub = 'Training'
             shape_dict = DataSet().training('image')
+            dog_cap = 800
+            p_cap = 2400
         elif subset == "develop":
             self.sub = 'Development'
             shape_dict = DataSet().development('image')
+            dog_cap = 100
+            p_cap = 300
         elif subset == "validate":
             self.sub = 'Validation'
             shape_dict = DataSet().validation('image')
+            dog_cap = 100
+            p_cap = 300
         else:
             print("did not expect " + subset)
 
         # Add images
-        for shape in shape_dict.keys():
-            for image in shape_dict[shape]:
+        
+        for i, shape in enumerate(sorted(shape_dict.keys())):
+  
+            for j, image in enumerate(shape_dict[shape]):
+               
                 image_path = DataSet().path('image', shape, self.sub) + image
                 self.add_image(
                     "full",
                     image_id=image,  # use file name as a unique image id
                     path=image_path,
+                    annotations=i,
                     width=400, height=224)
 
     def load_mask(self, image_id):
@@ -167,38 +177,45 @@ class FullDataset(utils.Dataset):
         """
         
         if self.sub == 'Training':
-            mask_id = DataSet.training(self, "mask")
+            mask_set = DataSet.training(self, "mask")
         elif self.sub == 'Development':
-            mask_id = DataSet.development(self, "mask")
+            mask_set = DataSet.development(self, "mask")
         elif self.sub == "Validation": 
-            mask_id = DataSet.validation(self, "mask")
+            mask_set = DataSet.validation(self, "mask")
         else:
             print("expected Training, Development, or Validation, not %s" % str(self.sub))
             
         shape = None
         i = 0
-        for sh in mask_id.keys():
-            for j, mask in enumerate(mask_id[sh]):
-                if i == image_id
-                    shape = sh
-                    image_id = j
-                    break
-                    
-                i += 1
         
+        for sh in sorted(mask_set.keys()):
+            for j, mask in enumerate(mask_set[sh]):
+                if i == image_id:
+                    shape = sh
+                    mask_id = j
+                    break
+                i += 1
+            else:
+                continue  # only executed if the inner loop did NOT break
+            break  # only executed if the inner loop DID break
         # Load image
         mask = skimage.io.imread(DataSet.path(self, "mask", shape, self.sub)
-                                 + mask_id[shape][image_id])
+                                 + mask_set[shape][mask_id])
         # If grayscale. Convert to RGB for consistency.
         if mask.ndim != 3:
             mask = skimage.color.gray2rgb(mask)
         # If has an alpha channel, remove it for consistency
         if mask.shape[-1] == 4:
             mask = mask[..., :3]
-
-        # Return mask, and array of class IDs of each instance. Since we have
-        # one class ID only, we return an array of 1s
-        return mask.astype(np.bool), np.ones([mask.shape[-1]], dtype=np.int32)  # mask.shape[-1]
+        class_ids = []
+        class_id = self.map_source_class_id("full.{}".format(
+                self.image_info[image_id]["annotations"]))
+        class_ids.append(class_id)
+        class_ids.append(class_id)
+        class_ids.append(class_id)
+        
+        # Return mask, and array of class IDs of each instance. 
+        return mask.astype(np.bool), np.array(class_ids, dtype=np.int32) #np.ones([mask.shape[-1]], dtype=np.int32)  # mask.shape[-1]
 
     def image_reference(self, image_id):
         """Return the path of the image."""
@@ -336,12 +353,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Validate arguments
-    if args.command == "train":
-        assert args.dataset, "Argument --dataset is required for training"
+    # if args.command == "train":
+    #     assert args.dataset, "Argument --dataset is required for training"
     # elif args.command == "splash":
     #     assert args.image or args.video,\
     #            "Provide --image or --video to apply color splash"
-
+    if args.dataset is None:
+        args.datset = "Placeholder"
     print("Weights: ", args.weights)
     print("Dataset: ", args.dataset)
     print("Logs: ", args.logs)

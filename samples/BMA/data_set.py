@@ -31,7 +31,7 @@ class DataSet():
     # num_val = num_devel  # (they are the same - 10%)
 
     # List of all the shapes contained in
-    shape_names = os.listdir(IMAGE_DIR + '/Training' + im_dir)
+    shape_names = sorted(os.listdir(IMAGE_DIR + '/Training' + im_dir))
 
     def training(self, type, shape=None):
         """
@@ -53,11 +53,21 @@ class DataSet():
 
         if shape is None:
             training = {}
-            item_list = []
+            
             for item in DataSet.shape_names:
-                ph = os.listdir(directory + '/' + item + '/.')
+                ph = sorted(os.listdir(directory + '/' + item + '/.'))
+                item_list = []
+                j = 0 
                 for image in ph:
+                     # if statements for leveling dataset to account for blobby/skinny shapes. 
+                    if (item == "cat" or item == "dog" or item == "sheep") and j == 800:
+                        #print("breaking for " + str(item))
+                        break
+                    if item == "person" and j == 2400:
+                        #print("breaking for " + str(item))
+                        break
                     if image.endswith('.jpg') or image.endswith('.png'):
+                        j += 1
                         item_list.append(image) 
                 training[item] = sorted(item_list)
             return training
@@ -96,9 +106,25 @@ class DataSet():
 
         if shape is None:
             development = {}
-            for i, item in enumerate(file_list):
-                development[item] = os.listdir(directory + '/' + item + '/.')
+            
+            for item in DataSet.shape_names:
+                ph = sorted(os.listdir(directory + '/' + item + '/.'))
+                item_list = []
+                j = 0
+                for image in ph:
+                    # if statements for leveling dataset to account for blobby/skinny shapes. 
+                    if (item == "cat" or item == "dog" or item == "sheep") and j == 100:
+                        #print("breaking for " + str(item))
+                        break
+                    if item == "person" and j == 300:
+                        #print("breaking for " + str(item))
+                        break
+                    if image.endswith('.jpg') or image.endswith('.png'):
+                        j += 1
+                        item_list.append(image) 
+                development[item] = sorted(item_list)
             return development
+        
         else:
             if shape not in DataSet.shape_names:
                 raise ValueError("shape should be contained in %s, not %s" % (DataSet.shape_names, shape))
@@ -126,9 +152,23 @@ class DataSet():
 
         if shape is None:
             validation = {}
-            for i, item in enumerate(file_list):
-
-                validation[item] = os.listdir(directory + '/' + item + '/.')
+            
+            for item in DataSet.shape_names:
+                ph = sorted(os.listdir(directory + '/' + item + '/.'))
+                item_list = []
+                j = 0
+                for image in ph:
+                    # if statements for leveling dataset to account for blobby/skinny shapes. 
+                    if (item == "cat" or item == "dog" or item == "sheep") and j == 100:
+                        #print("breaking for " + str(item))
+                        break
+                    if item == "person" and j == 300:
+                        #print("breaking for " + str(item))
+                        break
+                    if image.endswith('.jpg') or image.endswith('.png'):
+                        j += 1
+                        item_list.append(image) 
+                validation[item] = sorted(item_list)
             return validation
         else:
             if shape not in DataSet.shape_names:
