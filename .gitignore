@@ -2,7 +2,7 @@
 datasets/
 logs/
 *.h5
-results/
+#results/
 temp/
 test/
 
