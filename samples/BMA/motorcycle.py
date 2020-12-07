@@ -27,6 +27,17 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
     python3 balloon.py splash --weights=last --video=<URL or path to file>
 """
 
+# Set matplotlib backend
+# This has to be done before other importa that might
+# set it, but only if we're running in script mode
+# rather than being imported.
+if __name__ == '__main__':
+    import matplotlib
+    # Agg backend runs without a display
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+
 import os
 import sys
 import json
@@ -36,10 +47,13 @@ import numpy as np
 # Root directory of the project
 ROOT_DIR = os.path.abspath("../../")
 
+# Record results here:
+RESULTS_DIR = os.path.join(ROOT_DIR, "/home/joaquinemilio7/MRCNN-BMA/samples/BMA/results/motorcycle/")
+print(RESULTS_DIR)
 # Import Mask RCNN
 sys.path.append(ROOT_DIR)  # To find local version of the library
 from mrcnn.config import Config
-from mrcnn import model as modellib, utils
+from mrcnn import model as modellib, utils, visualize
 
 # Path to trained weights file
 COCO_WEIGHTS_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
@@ -73,19 +87,28 @@ class MotorConfig(Config):
     # Skip detections with < 90% confidence
     DETECTION_MIN_CONFIDENCE = 0.9
 
+class MotorInferenceConfig(MotorConfig):
+    # Set batch size to 1 to run one image at a time
+    GPU_COUNT = 1
+    IMAGES_PER_GPU = 1
+    # Don't resize imager for inferencing
+    #IMAGE_RESIZE_MODE = "pad64"
+    # Non-max suppression threshold to filter RPN proposals.
+    # You can increase this during training to generate more propsals.
+    RPN_NMS_THRESHOLD = 0.7
 
 ############################################################
 #  Dataset
 ############################################################
 
 class MotorDataset(utils.Dataset):
-
+    
     def load_motor(self, subset, set=None):
         """Load a subset of the Motorcycle dataset.
         subset: Subset to load: train, develop or validate
         """
 
-        from data_set import DataSet
+        from samples.BMA.data_set import DataSet
         # Add classes. We have only one class to add.
         self.add_class("motorcycle", 1, "motorcycle")
 
@@ -111,15 +134,20 @@ class MotorDataset(utils.Dataset):
         # Note: In VIA 2.0, regions was changed from a dict to a list.
         #annotations = json.load(open(os.path.join(dataset_dir, "via_region_data.json")))
         if subset == "train":
+            self.sub = 'Training'
             annotations = sorted(DataSet().training('image', 'motorcycle'))
         elif subset == "develop":
-            annotations = DataSet().development('image', 'motorcycle')
+            self.sub = 'Development'
+            annotations = sorted(DataSet().development('image', 'motorcycle'))
+        elif subset == "validate":
+            self.sub = 'Validation'
+            annotations = sorted(DataSet().validation('image', 'motorcycle'))
         else:
-            annotations = DataSet().validation('image', 'motorcycle')
+            print("did not expect " + subset)
 
         # Add images
         for a in annotations:
-            image_path = DataSet().path('image', 'motorcycle') + a
+            image_path = DataSet().path('image', 'motorcycle', self.sub) + a
             self.add_image(
                 "motorcycle",
                 image_id=a,  # use file name as a unique image id
@@ -152,12 +180,20 @@ class MotorDataset(utils.Dataset):
         file_name = self.image_info[image_id]["id"]
         # image = image.imread(fname=image_id, format="jpg") #.image
 
-        from data_set import DataSet
+        from samples.BMA.data_set import DataSet
         """Load the specified image and return a [H,W,3] Numpy array.
                 """
+        if self.sub == 'Training':
+            mask_id = sorted(DataSet.training(self, "mask", "motorcycle"))[image_id]
+        elif self.sub == 'Development':
+            mask_id = sorted(DataSet.development(self, "mask", "motorcycle"))[image_id]
+        elif self.sub == "Validation": 
+            mask_id = sorted(DataSet.validation(self, "mask", "motorcycle"))[image_id]
+        else:
+            print("expected Training, Development, or Validation, not %s" % str(self.sub)) 
         # Load image
-        mask = skimage.io.imread(DataSet.path(self, "mask", "motorcycle")
-                                 + sorted(DataSet.training(self, "mask", "motorcycle"))[image_id])
+        mask = skimage.io.imread(DataSet.path(self, "mask", "motorcycle", self.sub)
+                                 + mask_id)
         # If grayscale. Convert to RGB for consistency.
         if mask.ndim != 3:
             mask = skimage.color.gray2rgb(mask)
@@ -197,9 +233,113 @@ def train(model):
     print("Training network heads")
     model.train(dataset_train, dataset_val,
                 learning_rate=config.LEARNING_RATE,
-                epochs=5,
+                epochs=50,
                 layers='heads')
+    
+############################################################
+#  RLE Encoding
+############################################################
 
+def rle_encode(mask):
+    """Encodes a mask in Run Length Encoding (RLE).
+    Returns a string of space-separated values.
+    """
+    assert mask.ndim == 2, "Mask must be of shape [Height, Width]"
+    # Flatten it column wise
+    m = mask.T.flatten()
+    # Compute gradient. Equals 1 or -1 at transition points
+    g = np.diff(np.concatenate([[0], m, [0]]), n=1)
+    # 1-based indicies of transition points (where gradient != 0)
+    rle = np.where(g != 0)[0].reshape([-1, 2]) + 1
+    # Convert second index in each pair to lenth
+    rle[:, 1] = rle[:, 1] - rle[:, 0]
+    return " ".join(map(str, rle.flatten()))
+
+
+def rle_decode(rle, shape):
+    """Decodes an RLE encoded list of space separated
+    numbers and returns a binary mask."""
+    rle = list(map(int, rle.split()))
+    rle = np.array(rle, dtype=np.int32).reshape([-1, 2])
+    rle[:, 1] += rle[:, 0]
+    rle -= 1
+    mask = np.zeros([shape[0] * shape[1]], np.bool)
+    for s, e in rle:
+        assert 0 <= s < mask.shape[0]
+        assert 1 <= e <= mask.shape[0], "shape: {}  s {}  e {}".format(shape, s, e)
+        mask[s:e] = 1
+    # Reshape and transpose
+    mask = mask.reshape([shape[1], shape[0]]).T
+    return mask
+
+
+def mask_to_rle(image_id, mask, scores):
+    "Encodes instance masks to submission format."
+    assert mask.ndim == 3, "Mask must be [H, W, count]"
+    # If mask is empty, return line with image ID only
+    if mask.shape[-1] == 0:
+        return "{},".format(image_id)
+    # Remove mask overlaps
+    # Multiply each instance mask by its score order
+    # then take the maximum across the last dimension
+    order = np.argsort(scores)[::-1] + 1  # 1-based descending
+    mask = np.max(mask * np.reshape(order, [1, 1, -1]), -1)
+    # Loop over instance masks
+    lines = []
+    for o in order:
+        m = np.where(mask == o, 1, 0)
+        # Skip if empty
+        if m.sum() == 0.0:
+            continue
+        rle = rle_encode(m)
+        lines.append("{}, {}".format(image_id, rle))
+    return "\n".join(lines)
+
+    
+############################################################
+#  Detection
+############################################################
+
+def detect(model, dataset_dir=None, subset=None):
+    """Run detection on images in the given directory."""
+    print("Running on {}".format(dataset_dir))
+    print(RESULTS_DIR)
+    # Create directory
+    if not os.path.exists(RESULTS_DIR):
+        os.makedirs(RESULTS_DIR)
+    submit_dir = "submit_{:%Y%m%dT%H%M%S}".format(datetime.datetime.now())
+    submit_dir = os.path.join(RESULTS_DIR, submit_dir)
+    os.makedirs(submit_dir)
+
+    # Read dataset
+    dataset = MotorDataset()
+    dataset.load_motor("develop")
+    dataset.prepare()
+    # Load over images
+    submission = []
+    for image_id in dataset.image_ids:
+        # Load image and run detection
+        image = dataset.load_image(image_id)
+        # Detect objects
+        r = model.detect([image], verbose=0)[0]
+        # Encode image to RLE. Returns a string of multiple lines
+        source_id = dataset.image_info[image_id]["id"]
+        rle = mask_to_rle(source_id, r["masks"], r["scores"])
+        submission.append(rle)
+        # Save image with masks
+        visualize.display_instances(
+            image, r['rois'], r['masks'], r['class_ids'],
+            dataset.class_names, r['scores'],
+            show_bbox=False, show_mask=False,
+            title="Predictions")
+        plt.savefig("{}/{}.png".format(submit_dir, dataset.image_info[image_id]["id"]))
+
+    # Save to csv file
+    submission = "ImageId,EncodedPixels\n" + "\n".join(submission)
+    file_path = os.path.join(submit_dir, "submit.csv")
+    with open(file_path, "w") as f:
+        f.write(submission)
+    print("Saved to ", submit_dir)
 
 # def color_splash(image, mask):
 #     """Apply color splash effect.
@@ -302,21 +442,33 @@ if __name__ == '__main__':
     parser.add_argument('--video', required=False,
                         metavar="path or URL to video",
                         help='Video to apply the color splash effect on')
+    parser.add_argument('--subset', required=False,
+                        metavar="Dataset sub-directory",
+                        help="Subset of dataset to run prediction on")
     args = parser.parse_args()
 
     # Validate arguments
     if args.command == "train":
         assert args.dataset, "Argument --dataset is required for training"
+    # elif args.command == "detect":
+    #     assert args.subset, "Provide --subset to run prediction on"
+
     # elif args.command == "splash":
     #     assert args.image or args.video,\
     #            "Provide --image or --video to apply color splash"
 
     print("Weights: ", args.weights)
     print("Dataset: ", args.dataset)
+    if args.subset:
+        print("Subset: ", args.subset)
     print("Logs: ", args.logs)
-
+    
     # Configurations
-    config = MotorConfig()
+    if args.command == "train":
+        config = MotorConfig()
+    else:
+        config = MotorInferenceConfig()
+    config.display()
     # else:
     #     class InferenceConfig(MotorConfig):
     #         # Set batch size to 1 since we'll be running inference on
@@ -363,6 +515,8 @@ if __name__ == '__main__':
     # Train or evaluate
     if args.command == "train":
         train(model)
+    elif args.command == "detect":
+        detect(model, args.dataset, args.subset)
     # elif args.command == "splash":
     #     detect_and_color_splash(model, image_path=args.image,
     #                             video_path=args.video)
